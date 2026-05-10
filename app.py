@@ -1,55 +1,56 @@
 import streamlit as st
-from treasury_agent import run_treasury_agent
+from project_manager import run_fintech_flow
 
-st.title("Stablecoin Treasury Payment Agent")
+st.set_page_config(page_title="AI Credit + Treasury Risk Platform", layout="wide")
 
+st.title("AI Credit + Treasury Risk Platform")
 st.write(
-    "Paste a stablecoin payment request below. Include amount, currency, wallet address, "
-    "payment purpose, vendor status, and blockchain network."
+    "This demo combines underwriting, treasury payment review, liquidity controls, "
+    "stablecoin/network risk, and execution decisioning."
 )
 
-payment_request = st.text_area(
-    "Payment request",
-    value="""Pay vendor Acme Analytics 12000 USDC on Ethereum.
-    Purpose: monthly data services invoice.
-    Wallet address: 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.
-    Vendor is approved. Payment is due today."""
-)
+default_input = """
+Borrower requests a 25000 loan for debt consolidation.
+Credit score: 680.
+Annual income: 85000.
+Existing monthly debt payments: 2500.
+New loan payment: 3000.
+Loan replaces existing debt: yes.
 
-if st.button("Run Treasury Review"):
-    result = run_treasury_agent(payment_request)
+Treasury payment:
+Send 25000 USDC on Tron.
+Purpose: Loan disbursement.
+Wallet address: 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.
+Vendor is approved.
+"""
 
-    # 🎨 Decision display
-    decision = result["decision"]
+user_input = st.text_area("Enter borrower and treasury payment details:", default_input, height=260)
 
-    st.subheader("Decision")
+if st.button("Run AI Risk Workflow"):
+    try:
+        result = result = run_fintech_flow()
 
-    if decision == "approve":
-        st.success("APPROVE")
-    elif decision == "flag":
-        st.warning("FLAG - Review Required")
-    else:
-        st.error("REJECT")
+        st.subheader("Credit Decision")
+        st.write(result.get("credit_decision", "Not available"))
 
-    st.divider()
+        st.subheader("Treasury Decision")
+        treasury_result = result.get("treasury_result")
+        if treasury_result:
+            st.write(treasury_result.get("final_decision", "Not available"))
 
-    # 📊 Layout
-    col1, col2 = st.columns(2)
+            st.subheader("Treasury Memo")
+            st.text(treasury_result.get("memo", "No memo available"))
 
-    with col1:
-        st.subheader("Parsed Data")
-        st.json(result["parsed"])
+            if "liquidity_result" in treasury_result:
+                st.subheader("Liquidity Assessment")
+                st.json(treasury_result["liquidity_result"])
 
-    with col2:
-        st.subheader("Issues")
-        if result["issues"]:
-            for issue in result["issues"]:
-                st.write("•", issue)
-        else:
-            st.write("No issues identified")
+        st.subheader("Execution Result")
+        st.json(result.get("execution_result", result))
 
-    st.divider()
+        st.subheader("Full Result")
+        st.json(result)
 
-    # 🧾 Memo
-    st.subheader("Treasury Memo")
-    st.code(result["memo"])
+    except Exception as e:
+        st.error("The workflow failed.")
+        st.exception(e)
