@@ -28,7 +28,7 @@ user_input = st.text_area("Enter borrower and treasury payment details:", defaul
 
 if st.button("Run AI Risk Workflow"):
     try:
-        result = result = run_fintech_flow()
+        result = run_fintech_flow(user_input)
 
         st.subheader("Credit Decision")
         st.write(result.get("credit_decision", "Not available"))

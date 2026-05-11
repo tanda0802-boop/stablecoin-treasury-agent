@@ -4,6 +4,68 @@ from treasury_agent import (
     assess_counterparty_exposure
 )
 
+import re
+
+
+def parse_borrower_data(text):
+    credit_score_match = re.search(r"credit score:\s*(\d+)", text, re.IGNORECASE)
+    annual_income_match = re.search(r"annual income:\s*(\d+)", text, re.IGNORECASE)
+    existing_debt_match = re.search(r"existing monthly debt payments:\s*(\d+)", text, re.IGNORECASE)
+    new_payment_match = re.search(r"new loan payment:\s*(\d+)", text, re.IGNORECASE)
+    loan_amount_match = re.search(r"requests a\s*(\d+)\s*loan", text, re.IGNORECASE)
+    replaces_debt_match = re.search(r"loan replaces existing debt:\s*(yes|no)", text, re.IGNORECASE)
+
+    return {
+        "credit_score": int(credit_score_match.group(1)) if credit_score_match else None,
+        "annual_income": int(annual_income_match.group(1)) if annual_income_match else None,
+        "existing_monthly_debt": int(existing_debt_match.group(1)) if existing_debt_match else None,
+        "new_loan_payment": int(new_payment_match.group(1)) if new_payment_match else None,
+        "loan_amount": int(loan_amount_match.group(1)) if loan_amount_match else None,
+        "replaces_debt": replaces_debt_match.group(1).lower() == "yes" if replaces_debt_match else False,
+    }
+
+
+def underwrite_borrower(borrower):
+    monthly_income = borrower["annual_income"] / 12
+
+    if borrower["replaces_debt"]:
+        post_loan_debt = borrower["new_loan_payment"]
+    else:
+        post_loan_debt = borrower["existing_monthly_debt"] + borrower["new_loan_payment"]
+
+    dti = post_loan_debt / monthly_income
+    dti_percent = round(dti * 100, 1)
+
+    reasons = []
+
+    if borrower["credit_score"] < 620:
+        reasons.append("Credit score below minimum threshold")
+
+    if dti > 0.50:
+        reasons.append(f"Post-loan DTI is extremely high at {dti_percent}%")
+
+    if borrower["new_loan_payment"] > monthly_income:
+        reasons.append("New loan payment exceeds monthly income")
+
+    if borrower["loan_amount"] and borrower["loan_amount"] > borrower["annual_income"]:
+        reasons.append("Loan amount exceeds annual income")
+
+    if reasons:
+        decision = "reject"
+    elif dti > 0.36:
+        decision = "approve_with_conditions"
+        reasons.append(f"Post-loan DTI is elevated at {dti_percent}%")
+    else:
+        decision = "approve"
+        reasons.append(f"Post-loan DTI is acceptable at {dti_percent}%")
+
+    return {
+        "decision": decision,
+        "monthly_income": round(monthly_income, 2),
+        "post_loan_debt": post_loan_debt,
+        "post_loan_dti_percent": dti_percent,
+        "reasons": reasons,
+    }
 def choose_stablecoin(parsed):
     """
     Choose the stablecoin for loan disbursement.
@@ -20,7 +82,7 @@ def choose_stablecoin(parsed):
     return "USDC"
 
 
-def run_fintech_flow(borrower_approved=True):
+def run_fintech_flow(user_input):
     """
     Temporary project manager / orchestrator.
 
@@ -29,7 +91,10 @@ def run_fintech_flow(borrower_approved=True):
     Step 3: Run liquidity assessment.
     Step 4: Send payment request to treasury agent.
     """
+    borrower = parse_borrower_data(user_input)
+    underwriting_result = underwrite_borrower(borrower)
 
+    borrower_approved = underwriting_result["decision"] in ["approve", "approve_with_conditions"]
     if borrower_approved:
 
         loan_amount = 25000
@@ -103,8 +168,10 @@ def run_fintech_flow(borrower_approved=True):
         treasury_result = None
 
     return {
-        "credit_decision": "approve" if borrower_approved else "reject",
-        "treasury_result": treasury_result
+        "credit_decision": underwriting_result["decision"],
+    "underwriting_result": underwriting_result,
+    "treasury_result": treasury_result
+
     }
 
 
