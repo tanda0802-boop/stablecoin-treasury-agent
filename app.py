@@ -128,9 +128,6 @@ if st.button("Run AI Risk Workflow", type="primary"):
             with st.expander("Treasury memo"):
                 st.text(treasury.get("memo") or "No memo available")
 
-        with st.expander("Technical details (optional)"):
-            st.json(result)
-
     except Exception as exc:
         st.error("The workflow failed.")
         st.exception(exc)
